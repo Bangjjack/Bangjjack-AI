@@ -4,7 +4,7 @@
 # ==============================================================
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 
 # ── 입력: 한 사람의 프로필 ────────────────────────────────────
@@ -101,3 +101,122 @@ class MatchResult(BaseModel):
 
 class TopMatchResponse(BaseModel):
     top_matches: List[MatchResult]
+
+
+# ============================================================
+# /match-detail 전용 스키마 — DB ENUM 그대로 받는 입력
+# ============================================================
+
+# ── DB ENUM 타입 정의 (Literal로 검증) ───────────────────────
+GenderEnum     = Literal["MALE", "FEMALE"]
+BedtimeEnum    = Literal["BEFORE_22", "BETWEEN_22_24", "BETWEEN_24_2",
+                         "AFTER_2", "IRREGULAR"]
+WakeUpEnum     = Literal["BEFORE_6", "BETWEEN_6_8", "BETWEEN_8_10",
+                         "AFTER_10", "IRREGULAR"]
+CallHabitEnum  = Literal["WHISPER", "OUTSIDE_ONLY", "INSIDE_OK"]
+CleaningEnum   = Literal["RARELY", "SOMETIMES", "ONCE_OR_TWICE_A_WEEK",
+                         "ALMOST_DAILY"]
+DormStayEnum   = Literal["MOSTLY_OUTSIDE", "HALF_AND_HALF", "MOSTLY_INSIDE"]
+NoiseEnum      = Literal["VERY_INSENSITIVE", "SLIGHTLY_INSENSITIVE",
+                         "NORMAL", "SLIGHTLY_SENSITIVE", "VERY_SENSITIVE"]
+SmokingEnum    = Literal["NON_SMOKER", "CIGARETTE", "ELECTRONIC_CIGARETTE"]
+SleepHabitEnum = Literal["NONE", "TOSS_AND_TURN", "FREQUENT_WAKING",
+                         "SNORING", "TEETH_GRINDING"]
+PriorityEnum   = Literal["BEDTIME", "CALL_HABIT", "CLEANING_HABIT",
+                         "DORM_STAY_TIME", "INDOOR_TEMPERATURE",
+                         "ITEM_SHARING", "NOISE_SENSITIVITY",
+                         "SLEEP_HABIT", "SMOKING", "WAKE_UP_TIME"]
+
+
+# ── DB ENUM을 그대로 받는 입력 스키마 ────────────────────────
+class RawProfile(BaseModel):
+    """백엔드가 DB ENUM 그대로 보내는 입력 형식."""
+    gender:            GenderEnum            = Field(..., description="users.gender")
+    bedtime:           BedtimeEnum           = Field(..., description="lifestyle_checklists.bedtime")
+    wake_up_time:      WakeUpEnum            = Field(..., description="lifestyle_checklists.wake_up_time")
+    call_habit:        CallHabitEnum         = Field(..., description="lifestyle_checklists.call_habit")
+    cleaning_cycle:    CleaningEnum          = Field(..., description="lifestyle_checklists.cleaning_cycle")
+    dorm_stay_time:    DormStayEnum          = Field(..., description="lifestyle_checklists.dorm_stay_time")
+    noise_sensitivity: NoiseEnum             = Field(..., description="lifestyle_checklists.noise_sensitivity")
+    smoking:           SmokingEnum           = Field(..., description="lifestyle_checklists.smoking")
+    sleep_habits:      List[SleepHabitEnum]  = Field(default_factory=list,
+                                                     description="lifestyle_checklist_sleep_habits — 다중 선택")
+    first_priority:    PriorityEnum          = Field(..., description="roommate_preferences.first_priority")
+    second_priority:   PriorityEnum          = Field(..., description="roommate_preferences.second_priority")
+    third_priority:    PriorityEnum          = Field(..., description="roommate_preferences.third_priority (현재 모델은 미사용)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "gender":            "FEMALE",
+                "bedtime":           "BETWEEN_22_24",
+                "wake_up_time":      "BETWEEN_6_8",
+                "call_habit":        "WHISPER",
+                "cleaning_cycle":    "ONCE_OR_TWICE_A_WEEK",
+                "dorm_stay_time":    "MOSTLY_INSIDE",
+                "noise_sensitivity": "NORMAL",
+                "smoking":           "NON_SMOKER",
+                "sleep_habits":      ["TOSS_AND_TURN", "FREQUENT_WAKING"],
+                "first_priority":    "CLEANING_HABIT",
+                "second_priority":   "NOISE_SENSITIVITY",
+                "third_priority":    "SLEEP_HABIT",
+            }
+        }
+
+
+class MatchDetailRequest(BaseModel):
+    user_a: RawProfile
+    user_b: RawProfile
+
+    class Config:
+        # Swagger UI가 "Try it out"을 펼쳤을 때 서로 다른 두 사용자가
+        # 기본 예시로 채워지도록 명시. (RawProfile의 단일 example을
+        # 양쪽에 그대로 채우면 user_a == user_b 가 되어 matchRate=100
+        # 으로 보이기 때문에 명시적으로 두 개의 다른 예시를 지정한다.)
+        json_schema_extra = {
+            "example": {
+                "user_a": {
+                    "gender":            "FEMALE",
+                    "bedtime":           "BETWEEN_22_24",
+                    "wake_up_time":      "BETWEEN_6_8",
+                    "call_habit":        "WHISPER",
+                    "cleaning_cycle":    "ONCE_OR_TWICE_A_WEEK",
+                    "dorm_stay_time":    "MOSTLY_INSIDE",
+                    "noise_sensitivity": "NORMAL",
+                    "smoking":           "NON_SMOKER",
+                    "sleep_habits":      ["TOSS_AND_TURN", "FREQUENT_WAKING"],
+                    "first_priority":    "CLEANING_HABIT",
+                    "second_priority":   "NOISE_SENSITIVITY",
+                    "third_priority":    "SLEEP_HABIT",
+                },
+                "user_b": {
+                    "gender":            "FEMALE",
+                    "bedtime":           "AFTER_2",
+                    "wake_up_time":      "AFTER_10",
+                    "call_habit":        "INSIDE_OK",
+                    "cleaning_cycle":    "RARELY",
+                    "dorm_stay_time":    "MOSTLY_OUTSIDE",
+                    "noise_sensitivity": "VERY_SENSITIVE",
+                    "smoking":           "ELECTRONIC_CIGARETTE",
+                    "sleep_habits":      ["SNORING"],
+                    "first_priority":    "SMOKING",
+                    "second_priority":   "SLEEP_HABIT",
+                    "third_priority":    "BEDTIME",
+                },
+            }
+        }
+
+
+class MatchDetailResponse(BaseModel):
+    matchRate: int = Field(
+        ..., ge=0, le=100,
+        description="매칭률 (0~100 정수, probability * 100 반올림)"
+    )
+    matchedFeatures: List[str] = Field(
+        ...,
+        description="match_* 피처 중 두 사용자가 일치한 항목 키 목록"
+    )
+    topInfluentialFeatures: List[str] = Field(
+        ...,
+        description="SHAP 절댓값 기준 영향력 Top 3 피처 키"
+    )

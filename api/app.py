@@ -21,6 +21,7 @@ from config import MODEL_PATH, FEATURE_COLS
 from api.routes.predict import router as predict_router
 from api.routes.explain import router as explain_router
 from api.routes.matches import router as matches_router
+from api.routes.match_detail import router as match_detail_router
 
 
 # ── 서버 시작/종료 시 실행 ─────────────────────────────────────
@@ -60,6 +61,7 @@ LightGBM + SHAP 기반 룸메이트 호환성 예측 API.
 | `POST /predict` | 두 사람의 호환 확률 예측 |
 | `POST /explain` | SHAP 기반 호환 판단 근거 |
 | `POST /top-matches` | 후보자 중 상위 K명 추천 |
+| `POST /match-detail` | **백엔드 통합용** — DB ENUM 입력, 매칭률+일치/영향 피처 반환 |
 
 ### 학습 피처
 - **diff_** × 10 : 순서형 차이 (취침시간, 청소빈도 등)
@@ -74,6 +76,7 @@ LightGBM + SHAP 기반 룸메이트 호환성 예측 API.
 app.include_router(predict_router, tags=["Prediction"])
 app.include_router(explain_router, tags=["Explanation"])
 app.include_router(matches_router, tags=["Matching"])
+app.include_router(match_detail_router, tags=["MatchDetail"])
 
 
 # ── GET /health ───────────────────────────────────────────────
