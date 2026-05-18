@@ -210,7 +210,7 @@ class MatchDetailRequest(BaseModel):
 class MatchDetailResponse(BaseModel):
     matchRate: int = Field(
         ..., ge=0, le=100,
-        description="매칭률 (0~100 정수, probability * 100 반올림)"
+        description="매칭률 (0~100 정수, logit 보정 적용 — 보통 10~90 범위)"
     )
     matchedFeatures: List[str] = Field(
         ...,
@@ -219,4 +219,110 @@ class MatchDetailResponse(BaseModel):
     topInfluentialFeatures: List[str] = Field(
         ...,
         description="SHAP 절댓값 기준 영향력 Top 3 피처 키"
+    )
+
+
+# ============================================================
+# /match-detail-batch — 1:N 배치 매칭 스키마
+# ============================================================
+
+class MatchDetailBatchRequest(BaseModel):
+    user: RawProfile = Field(..., description="기준 사용자")
+    candidates: List[RawProfile] = Field(
+        ..., min_length=1,
+        description="비교 대상 후보자 목록 (최소 1명)"
+    )
+    top_k: Optional[int] = Field(
+        default=None, ge=1,
+        description="반환할 상위 추천 수 (생략 시 전체 후보를 정렬해 반환)"
+    )
+
+    class Config:
+        # Swagger UI 기본 예시 — 1명 기준 + 후보 3명(잘 맞음/안 맞음/중간)
+        json_schema_extra = {
+            "example": {
+                "user": {
+                    "gender":            "FEMALE",
+                    "bedtime":           "BETWEEN_22_24",
+                    "wake_up_time":      "BETWEEN_6_8",
+                    "call_habit":        "WHISPER",
+                    "cleaning_cycle":    "ONCE_OR_TWICE_A_WEEK",
+                    "dorm_stay_time":    "MOSTLY_INSIDE",
+                    "noise_sensitivity": "NORMAL",
+                    "smoking":           "NON_SMOKER",
+                    "sleep_habits":      ["TOSS_AND_TURN"],
+                    "first_priority":    "CLEANING_HABIT",
+                    "second_priority":   "NOISE_SENSITIVITY",
+                    "third_priority":    "SLEEP_HABIT",
+                },
+                "candidates": [
+                    {  # 후보 0: 잘 맞을 사람 (취침만 살짝 다름)
+                        "gender":            "FEMALE",
+                        "bedtime":           "BETWEEN_24_2",
+                        "wake_up_time":      "BETWEEN_6_8",
+                        "call_habit":        "WHISPER",
+                        "cleaning_cycle":    "ONCE_OR_TWICE_A_WEEK",
+                        "dorm_stay_time":    "MOSTLY_INSIDE",
+                        "noise_sensitivity": "NORMAL",
+                        "smoking":           "NON_SMOKER",
+                        "sleep_habits":      [],
+                        "first_priority":    "CLEANING_HABIT",
+                        "second_priority":   "NOISE_SENSITIVITY",
+                        "third_priority":    "SLEEP_HABIT",
+                    },
+                    {  # 후보 1: 극도 비호환 (흡연 + 생활 정반대)
+                        "gender":            "FEMALE",
+                        "bedtime":           "AFTER_2",
+                        "wake_up_time":      "AFTER_10",
+                        "call_habit":        "INSIDE_OK",
+                        "cleaning_cycle":    "RARELY",
+                        "dorm_stay_time":    "MOSTLY_OUTSIDE",
+                        "noise_sensitivity": "VERY_SENSITIVE",
+                        "smoking":           "ELECTRONIC_CIGARETTE",
+                        "sleep_habits":      ["SNORING"],
+                        "first_priority":    "SMOKING",
+                        "second_priority":   "SLEEP_HABIT",
+                        "third_priority":    "BEDTIME",
+                    },
+                    {  # 후보 2: 중간 — 몇 가지 다름
+                        "gender":            "FEMALE",
+                        "bedtime":           "BETWEEN_24_2",
+                        "wake_up_time":      "BETWEEN_8_10",
+                        "call_habit":        "OUTSIDE_ONLY",
+                        "cleaning_cycle":    "SOMETIMES",
+                        "dorm_stay_time":    "HALF_AND_HALF",
+                        "noise_sensitivity": "SLIGHTLY_SENSITIVE",
+                        "smoking":           "NON_SMOKER",
+                        "sleep_habits":      ["TOSS_AND_TURN"],
+                        "first_priority":    "SLEEP_HABIT",
+                        "second_priority":   "CLEANING_HABIT",
+                        "third_priority":    "NOISE_SENSITIVITY",
+                    },
+                ],
+                "top_k": 3,
+            }
+        }
+
+
+class MatchDetailBatchItem(BaseModel):
+    rank: int = Field(..., ge=1, description="순위 (1이 가장 호환됨)")
+    candidateIndex: int = Field(
+        ..., ge=0,
+        description="요청 candidates 배열에서의 원본 인덱스"
+    )
+    matchRate: int = Field(..., ge=0, le=100, description="매칭률 (logit 보정)")
+    matchedFeatures: List[str] = Field(
+        ...,
+        description="의미 있게 일치한 match_* 피처 키 목록"
+    )
+    topInfluentialFeatures: List[str] = Field(
+        ...,
+        description="SHAP 절댓값 기준 영향력 Top 3 피처 키"
+    )
+
+
+class MatchDetailBatchResponse(BaseModel):
+    ranked: List[MatchDetailBatchItem] = Field(
+        ...,
+        description="matchRate 내림차순 정렬 결과 (top_k 적용 후)"
     )

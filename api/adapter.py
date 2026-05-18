@@ -92,16 +92,30 @@ SLEEP_HABIT_MAP: Dict[str, str] = {
 }
 
 # DB 우선순위 카테고리 → AI 모델 카테고리(sleep/clean/noise/smoking/rhythm)
-# AI 모델에 없는 카테고리(CALL_HABIT, INDOOR_TEMPERATURE, ITEM_SHARING)는 무시
+#
+# AI 모델은 학습 데이터 설계 시 5개 priority 카테고리(sleep/clean/noise/
+# smoking/rhythm)로만 학습되어 있어, 프론트가 제공하는 10개 priority
+# 옵션 중 일부(CALL_HABIT, INDOOR_TEMPERATURE, ITEM_SHARING)는 본래
+# 모델 카테고리에 직접 매칭되지 않는다.
+#
+# 사용자가 해당 priority를 고른 경우 silently 무시되면 매칭 점수에
+# 의미 있게 반영되지 않으므로, 도메인적 유사성을 기준으로 가장 가까운
+# AI 카테고리에 흡수 매핑한다. 향후 데이터 확장 시 독립 카테고리로
+# 분리 예정.
 PRIORITY_MAP: Dict[str, str] = {
-    "BEDTIME":           "rhythm",   # 취침 시간 → 생활 리듬
-    "WAKE_UP_TIME":      "rhythm",   # 기상 시간 → 생활 리듬
-    "DORM_STAY_TIME":    "rhythm",   # 체류 시간 → 생활 리듬
-    "SLEEP_HABIT":       "sleep",    # 잠버릇 → 수면 패턴
-    "CLEANING_HABIT":    "clean",
-    "NOISE_SENSITIVITY": "noise",
-    "SMOKING":           "smoking",
-    # 매핑 없음: CALL_HABIT, INDOOR_TEMPERATURE, ITEM_SHARING
+    # ── 직접 매핑 (학습 데이터에 그대로 존재) ─────────────────
+    "BEDTIME":            "rhythm",   # 취침 시간 → 생활 리듬
+    "WAKE_UP_TIME":       "rhythm",   # 기상 시간 → 생활 리듬
+    "DORM_STAY_TIME":     "rhythm",   # 체류 시간 → 생활 리듬
+    "SLEEP_HABIT":        "sleep",    # 잠버릇 → 수면 패턴
+    "CLEANING_HABIT":     "clean",
+    "NOISE_SENSITIVITY":  "noise",
+    "SMOKING":            "smoking",
+
+    # ── 흡수 매핑 (모델에 직접 카테고리 없음 — 도메인 유사도) ─
+    "CALL_HABIT":         "noise",    # 통화 = 주된 소음 소스
+    "INDOOR_TEMPERATURE": "rhythm",   # 생활 리듬·쾌적도 영향
+    "ITEM_SHARING":       "clean",    # 공간/물건 공유 = 청결·정리 영역
 }
 
 
