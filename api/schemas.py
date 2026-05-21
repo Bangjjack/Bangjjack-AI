@@ -207,18 +207,60 @@ class MatchDetailRequest(BaseModel):
         }
 
 
+# ── 매칭 리포트 응답 구성 요소 ────────────────────────────
+
+class MatchedItem(BaseModel):
+    """체크리스트 항목 중 일치한 항목 (matched)."""
+    key:         str = Field(..., description="항목 키 (예: bedtime, smoking)")
+    label:       str = Field(..., description="화면 표시용 라벨 (예: 취침 시간)")
+    description: str = Field(..., description="사용자 친화적 설명 (예: 둘 다 24~2시로 자는 편이에요)")
+
+
+class MismatchedItem(BaseModel):
+    """체크리스트 항목 중 불일치한 항목 — 조율이 필요한 항목."""
+    key:         str = Field(..., description="항목 키")
+    label:       str = Field(..., description="화면 표시용 라벨")
+    description: str = Field(..., description="차이 설명 (예: 청소 주기가 달라요)")
+    advice:      str = Field(..., description="조율 가이드 (예: 청소 담당을 미리 정해두세요)")
+
+
+class SummaryComment(BaseModel):
+    """AI 종합 코멘트 — 자연어로 매칭 결과를 풀어서 설명."""
+    positive: str = Field(..., description="잘 맞는 점 중심 코멘트")
+    caution:  str = Field(..., description="미리 조율할 점 코멘트 (없으면 빈 문자열)")
+
+
+class MatchCounts(BaseModel):
+    """체크리스트 항목 카운트 — '7개 항목 중 5개 일치' 표시용."""
+    matched:    int = Field(..., ge=0)
+    mismatched: int = Field(..., ge=0)
+    total:      int = Field(..., ge=0)
+
+
 class MatchDetailResponse(BaseModel):
     matchRate: int = Field(
         ..., ge=0, le=100,
         description="매칭률 (0~100 정수, logit 보정 적용 — 보통 10~90 범위)"
     )
-    matchedFeatures: List[str] = Field(
+    matchedFeatures: List[MatchedItem] = Field(
         ...,
-        description="match_* 피처 중 두 사용자가 일치한 항목 키 목록"
+        description="체크리스트 항목 중 일치한 항목들 (key, label, description)"
+    )
+    mismatchedFeatures: List[MismatchedItem] = Field(
+        ...,
+        description="체크리스트 항목 중 불일치한 항목들 (조율 가이드 포함)"
     )
     topInfluentialFeatures: List[str] = Field(
         ...,
-        description="SHAP 절댓값 기준 영향력 Top 3 피처 키"
+        description="SHAP 절댓값 기준 영향력 Top 3 피처 키 (대화 추천 주제 베이스)"
+    )
+    summaryComment: SummaryComment = Field(
+        ...,
+        description="AI 종합 코멘트 — 자연어 요약 (positive + caution)"
+    )
+    counts: MatchCounts = Field(
+        ...,
+        description="일치/불일치/전체 항목 수"
     )
 
 
@@ -311,13 +353,25 @@ class MatchDetailBatchItem(BaseModel):
         description="요청 candidates 배열에서의 원본 인덱스"
     )
     matchRate: int = Field(..., ge=0, le=100, description="매칭률 (logit 보정)")
-    matchedFeatures: List[str] = Field(
+    matchedFeatures: List[MatchedItem] = Field(
         ...,
-        description="의미 있게 일치한 match_* 피처 키 목록"
+        description="체크리스트 일치 항목 (key, label, description)"
+    )
+    mismatchedFeatures: List[MismatchedItem] = Field(
+        ...,
+        description="체크리스트 불일치 항목 (조율 가이드 포함)"
     )
     topInfluentialFeatures: List[str] = Field(
         ...,
         description="SHAP 절댓값 기준 영향력 Top 3 피처 키"
+    )
+    summaryComment: SummaryComment = Field(
+        ...,
+        description="AI 종합 코멘트 (positive + caution)"
+    )
+    counts: MatchCounts = Field(
+        ...,
+        description="일치/불일치/전체 항목 수"
     )
 
 

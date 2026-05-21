@@ -21,6 +21,7 @@ from api.adapter import (
     ONE_HOT_MATCH_KEYS,
 )
 from api.features import build_features
+from api.services.report import evaluate_checklist, generate_summary_comment
 from config import FEATURE_COLS
 
 
@@ -93,24 +94,45 @@ def compute_pair_detail(model, explainer,
                         user_a_raw: RawProfile,
                         user_b_raw: RawProfile) -> dict:
     """
-    한 쌍에 대한 풀 리포트 dict 반환.
-    keys: matchRate, matchedFeatures, topInfluentialFeatures
+    한 쌍에 대한 풀 매칭 리포트 dict 반환.
+
+    Keys:
+      - matchRate (int)
+      - matchedFeatures     (List[dict] — key/label/description)
+      - mismatchedFeatures  (List[dict] — key/label/description/advice)
+      - topInfluentialFeatures (List[str] — SHAP 영향력 Top 3 key)
+      - summaryComment      (dict — positive/caution)
+      - counts              (dict — matched/mismatched/total)
     """
     user_a = raw_to_user_profile(user_a_raw)
     user_b = raw_to_user_profile(user_b_raw)
     X = build_features(user_a, user_b)
 
     prob = float(model.predict_proba(X)[0][1])
+    match_rate = int(round(logit_calibration(prob) * 100))
 
     sv = explainer.shap_values(X)
     if isinstance(sv, list):
         sv = sv[1]
     sv_row = sv[0]   # shape (30,)
 
+    # 체크리스트 항목별 평가 (8개 항목 → matched + mismatched)
+    matched, mismatched = evaluate_checklist(user_a_raw, user_b_raw)
+
+    # 자연어 종합 코멘트
+    summary = generate_summary_comment(matched, mismatched, match_rate)
+
     return {
-        "matchRate":              int(round(logit_calibration(prob) * 100)),
-        "matchedFeatures":        filter_matched_features(user_a, X[0]),
+        "matchRate":              match_rate,
+        "matchedFeatures":        matched,
+        "mismatchedFeatures":     mismatched,
         "topInfluentialFeatures": top_influential_features(sv_row),
+        "summaryComment":         summary,
+        "counts": {
+            "matched":    len(matched),
+            "mismatched": len(mismatched),
+            "total":      len(matched) + len(mismatched),
+        },
     }
 
 
@@ -158,15 +180,27 @@ def compute_batch_details(model, explainer,
         sv_all = sv_all[1]
     # sv_all shape: (k, 30) — i번째 행이 sorted_indices[i] 후보의 SHAP
 
-    # 6) 응답 빌드
+    # 6) 응답 빌드 — 각 후보에 대해 체크리스트 평가 + 자연어 코멘트 포함
     results: List[dict] = []
     for rank, idx in enumerate(sorted_indices, start=1):
-        idx_int = int(idx)
+        idx_int    = int(idx)
+        match_rate = int(round(logit_calibration(float(probs[idx_int])) * 100))
+
+        matched, mismatched = evaluate_checklist(user_raw, candidates_raw[idx_int])
+        summary = generate_summary_comment(matched, mismatched, match_rate)
+
         results.append({
             "rank":                   rank,
             "candidateIndex":         idx_int,
-            "matchRate":              int(round(logit_calibration(float(probs[idx_int])) * 100)),
-            "matchedFeatures":        filter_matched_features(user_dict, feature_matrix[idx_int]),
+            "matchRate":              match_rate,
+            "matchedFeatures":        matched,
+            "mismatchedFeatures":     mismatched,
             "topInfluentialFeatures": top_influential_features(sv_all[rank - 1]),
+            "summaryComment":         summary,
+            "counts": {
+                "matched":    len(matched),
+                "mismatched": len(mismatched),
+                "total":      len(matched) + len(mismatched),
+            },
         })
     return results
