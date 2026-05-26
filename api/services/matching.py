@@ -21,7 +21,11 @@ from api.adapter import (
     ONE_HOT_MATCH_KEYS,
 )
 from api.features import build_features
-from api.services.report import evaluate_checklist, generate_summary_comment
+from api.services.report import (
+    evaluate_checklist,
+    generate_summary_comment,
+    generate_conversation_starters,
+)
 from config import FEATURE_COLS
 
 
@@ -119,14 +123,19 @@ def compute_pair_detail(model, explainer,
     # 체크리스트 항목별 평가 (8개 항목 → matched + mismatched)
     matched, mismatched = evaluate_checklist(user_a_raw, user_b_raw)
 
-    # 자연어 종합 코멘트
+    # 자연어 종합 코멘트 (brief / positive / caution)
     summary = generate_summary_comment(matched, mismatched, match_rate)
+
+    # SHAP 영향력 Top 키 → 대화 시작 문구 변환
+    top_keys = top_influential_features(sv_row)
+    starters = generate_conversation_starters(top_keys)
 
     return {
         "matchRate":              match_rate,
         "matchedFeatures":        matched,
         "mismatchedFeatures":     mismatched,
-        "topInfluentialFeatures": top_influential_features(sv_row),
+        "topInfluentialFeatures": top_keys,
+        "conversationStarters":   starters,
         "summaryComment":         summary,
         "counts": {
             "matched":    len(matched),
@@ -187,7 +196,9 @@ def compute_batch_details(model, explainer,
         match_rate = int(round(logit_calibration(float(probs[idx_int])) * 100))
 
         matched, mismatched = evaluate_checklist(user_raw, candidates_raw[idx_int])
-        summary = generate_summary_comment(matched, mismatched, match_rate)
+        summary  = generate_summary_comment(matched, mismatched, match_rate)
+        top_keys = top_influential_features(sv_all[rank - 1])
+        starters = generate_conversation_starters(top_keys)
 
         results.append({
             "rank":                   rank,
@@ -195,7 +206,8 @@ def compute_batch_details(model, explainer,
             "matchRate":              match_rate,
             "matchedFeatures":        matched,
             "mismatchedFeatures":     mismatched,
-            "topInfluentialFeatures": top_influential_features(sv_all[rank - 1]),
+            "topInfluentialFeatures": top_keys,
+            "conversationStarters":   starters,
             "summaryComment":         summary,
             "counts": {
                 "matched":    len(matched),

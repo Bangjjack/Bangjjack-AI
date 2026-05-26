@@ -226,8 +226,16 @@ class MismatchedItem(BaseModel):
 
 class SummaryComment(BaseModel):
     """AI 종합 코멘트 — 자연어로 매칭 결과를 풀어서 설명."""
-    positive: str = Field(..., description="잘 맞는 점 중심 코멘트")
-    caution:  str = Field(..., description="미리 조율할 점 코멘트 (없으면 빈 문자열)")
+    brief:    str = Field(..., description="헤더용 짧은 한 줄 코멘트 (공동생활 가이드 상단)")
+    positive: str = Field(..., description="매칭 리포트의 잘 맞는 점 중심 코멘트")
+    caution:  str = Field(..., description="매칭 리포트의 미리 조율할 점 코멘트 (없으면 빈 문자열)")
+
+
+class ConversationStarter(BaseModel):
+    """대화 추천 주제 한 개 — 화면에 그대로 표시 가능한 자연어 문구."""
+    key:      str = Field(..., description="topInfluentialFeatures의 피처 키")
+    starter:  str = Field(..., description='대화 시작 문장 (큰따옴표 포함, 예: "보통 몇 시쯤 자?")')
+    subtitle: str = Field(..., description="대화 주제 한 줄 설명")
 
 
 class MatchCounts(BaseModel):
@@ -252,11 +260,15 @@ class MatchDetailResponse(BaseModel):
     )
     topInfluentialFeatures: List[str] = Field(
         ...,
-        description="SHAP 절댓값 기준 영향력 Top 3 피처 키 (대화 추천 주제 베이스)"
+        description="SHAP 절댓값 기준 영향력 Top 3 피처 키 (디버깅/내부 참조용)"
+    )
+    conversationStarters: List[ConversationStarter] = Field(
+        ...,
+        description="topInfluentialFeatures 기반 대화 시작 추천 문구 (화면에 그대로 표시 가능)"
     )
     summaryComment: SummaryComment = Field(
         ...,
-        description="AI 종합 코멘트 — 자연어 요약 (positive + caution)"
+        description="AI 종합 코멘트 — brief / positive / caution"
     )
     counts: MatchCounts = Field(
         ...,
@@ -363,11 +375,15 @@ class MatchDetailBatchItem(BaseModel):
     )
     topInfluentialFeatures: List[str] = Field(
         ...,
-        description="SHAP 절댓값 기준 영향력 Top 3 피처 키"
+        description="SHAP 절댓값 기준 영향력 Top 3 피처 키 (디버깅/내부 참조용)"
+    )
+    conversationStarters: List[ConversationStarter] = Field(
+        ...,
+        description="topInfluentialFeatures 기반 대화 시작 추천 문구"
     )
     summaryComment: SummaryComment = Field(
         ...,
-        description="AI 종합 코멘트 (positive + caution)"
+        description="AI 종합 코멘트 (brief + positive + caution)"
     )
     counts: MatchCounts = Field(
         ...,
